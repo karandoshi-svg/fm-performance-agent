@@ -232,8 +232,13 @@ def parse_money(s: str) -> float:
     if not s:
         return 0.0
     s = s.strip()
+    if '%' in s or not any(c.isdigit() for c in s):
+        return 0.0
     mult = 1000 if 'K' in s else 1
-    return float(s.replace('$', '').replace(',', '').replace('K', '')) * mult
+    try:
+        return float(s.replace('$', '').replace(',', '').replace('K', '')) * mult
+    except ValueError:
+        return 0.0
 
 uk_w_spend = parse_money(uk_week_row[1]) if len(uk_week_row) > 1 else 0
 uk_p_spend = parse_money(uk_prev_row[1]) if len(uk_prev_row) > 1 else 0

@@ -196,7 +196,15 @@ uk_prev_row = uk_data_rows[-2] if len(uk_data_rows) >= 2 else []
 uk_qtd_row = next((r for r in sheet_rows if r and 'QTD (Q2)' in r[0]), [])
 
 def parse_money(s):
-    return float(s.replace('$','').replace(',','').replace('K','')) * (1000 if 'K' in s else 1) if s else 0
+    if not s:
+        return 0.0
+    s = s.strip()
+    if '%' in s or not any(c.isdigit() for c in s):
+        return 0.0
+    try:
+        return float(s.replace('$','').replace(',','').replace('K','')) * (1000 if 'K' in s else 1)
+    except ValueError:
+        return 0.0
 
 uk_w_spend = parse_money(uk_week_row[1]) if len(uk_week_row) > 1 else 0
 uk_p_spend = parse_money(uk_prev_row[1]) if len(uk_prev_row) > 1 else 0
