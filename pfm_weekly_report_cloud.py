@@ -15,14 +15,14 @@ US_Q2_TARGET  = 46_200_000
 Q2_START      = datetime.date(2026, 4, 1)
 
 # ── Credentials from env vars ────────────────────────────────────────────────
-SLACK_TOKEN         = os.environ['SLACK_BOT_TOKEN']
-SUPA_REFRESH_TOKEN  = os.environ['SUPERSET_REFRESH_TOKEN']
-SUPA_CLIENT_ID      = os.environ['SUPERSET_CLIENT_ID']
-SUPA_CLIENT_SECRET  = os.environ['SUPERSET_CLIENT_SECRET']
-G_ACCESS_TOKEN      = os.environ.get('GOOGLE_ACCESS_TOKEN', '')
-G_REFRESH_TOKEN     = os.environ['GOOGLE_REFRESH_TOKEN']
-G_CLIENT_ID         = os.environ['GOOGLE_CLIENT_ID']
-G_CLIENT_SECRET     = os.environ['GOOGLE_CLIENT_SECRET']
+SLACK_TOKEN         = os.environ['SLACK_BOT_TOKEN'].strip()
+SUPA_REFRESH_TOKEN  = os.environ['SUPERSET_REFRESH_TOKEN'].strip()
+SUPA_CLIENT_ID      = os.environ['SUPERSET_CLIENT_ID'].strip()
+SUPA_CLIENT_SECRET  = os.environ['SUPERSET_CLIENT_SECRET'].strip()
+G_ACCESS_TOKEN      = os.environ.get('GOOGLE_ACCESS_TOKEN', '').strip()
+G_REFRESH_TOKEN     = os.environ['GOOGLE_REFRESH_TOKEN'].strip()
+G_CLIENT_ID         = os.environ['GOOGLE_CLIENT_ID'].strip()
+G_CLIENT_SECRET     = os.environ['GOOGLE_CLIENT_SECRET'].strip()
 
 
 # ── Date windows ─────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ def get_superset_token() -> str:
     if resp.status_code != 200:
         # Fall back to the access token passed directly
         print(f"  Token refresh returned {resp.status_code}, falling back to SUPERSET_ACCESS_TOKEN env var")
-        return os.environ.get('SUPERSET_ACCESS_TOKEN', '')
+        return os.environ.get('SUPERSET_ACCESS_TOKEN', '').strip()
     data = resp.json()
     token = data.get('access_token', '')
     print(f"  Superset token refreshed (expires in {data.get('expires_in', '?')}s)")
