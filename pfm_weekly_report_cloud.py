@@ -222,10 +222,21 @@ def parse_money(s: str) -> float:
     except ValueError:
         return 0.0
 
+def parse_int(s: str) -> int:
+    if not s:
+        return 0
+    s = s.strip()
+    if '%' in s or not any(c.isdigit() for c in s):
+        return 0
+    try:
+        return int(s.replace(',', '').split('.')[0])
+    except ValueError:
+        return 0
+
 uk_w_spend = parse_money(uk_week_row[1]) if len(uk_week_row) > 1 else 0
 uk_p_spend = parse_money(uk_prev_row[1]) if len(uk_prev_row) > 1 else 0
-uk_w_nfus  = int(uk_week_row[2].replace(',', '')) if len(uk_week_row) > 2 else 0
-uk_p_nfus  = int(uk_prev_row[2].replace(',', '')) if len(uk_prev_row) > 2 else 0
+uk_w_nfus  = parse_int(uk_week_row[2]) if len(uk_week_row) > 2 else 0
+uk_p_nfus  = parse_int(uk_prev_row[2]) if len(uk_prev_row) > 2 else 0
 uk_w_roi   = float(uk_week_row[4]) if len(uk_week_row) > 4 else 0
 uk_p_roi   = float(uk_prev_row[4]) if len(uk_prev_row) > 4 else 0
 uk_w_cac   = parse_money(uk_week_row[5]) if len(uk_week_row) > 5 else 0
@@ -244,6 +255,11 @@ uk_pacing_sig = "✅" if uk_pacing >= 0.95 else ("🟡" if uk_pacing >= 0.85 els
 print(f"  UK spend=${uk_w_spend:,.0f}  NFUs={uk_w_nfus:,}  ROI={uk_w_roi:.1f}x")
 
 
+# ── Check if Superset data is available (it requires Robinhood internal network) ──
+superset_unavailable = (us_w_spend == 0 and eu_w_spend == 0 and us_w_nfas == 0)
+if superset_unavailable:
+    print("WARNING: Superset returned all-zero data — likely not reachable from this network.")
+
 # ── Compose Slack message ─────────────────────────────────────────────────────
 US_NFA_TARGET  = 202_727
 GOLD_TARGET    = 106_190
@@ -254,21 +270,37 @@ nfa_pace_sig   = "✅" if nfa_pacing >= 0.95 else ("🟡" if nfa_pacing >= 0.85 
 gold_pace_sig  = "✅" if gold_pacing >= 0.95 else ("🟡" if gold_pacing >= 0.85 else "🔴")
 us_spend_pace_sig = "✅" if us_pacing >= 0.95 else ("🟡" if us_pacing >= 0.85 else "🔴")
 
+if superset_unavailable:
+    us_section_sig  = "⚠️"
+    us_section_body = "_Superset data unavailable - run from Mac for full US/EU metrics_"
+    eu_section_sig  = "⚠️"
+    eu_section_body = "_Superset data unavailable_"
+else:
+    us_section_sig  = us_roi_sig
+    us_section_body = (
+        f"• ROI: *{us_w_roi:.2f}x* ({us_roi_wow} WoW)\n"
+        f"• Spend: *${us_w_spend/1e6:.1f}M* ({us_spend_wow} WoW)\n"
+        f"• NFAs: *{us_w_nfas:,}* ({us_nfas_wow} WoW)\n"
+        f"• Q2 Spend Pacing: ${us_qtd_sp/1e6:.1f}M / ${US_Q2_TARGET/1e6:.0f}M"
+        f" -> *{us_pacing*100:.0f}% of pace* {us_spend_pace_sig}"
+    )
+    eu_section_sig  = eu_sig
+    eu_section_body = (
+        f"• ROI: *{eu_w_roi:.2f}x* ({eu_roi_wow} WoW)\n"
+        f"• Spend: *${eu_w_spend:,.0f}* ({eu_spend_wow} WoW)\n"
+        f"• NFAs: *{eu_w_nfas:,}* ({eu_nfas_wow} WoW)"
+    )
+
 msg = f"""*PFM Weekly Performance Update | {week_label}*
 _Performance: {last_monday.strftime('%b %-d')}–{last_sunday.strftime('%-d')} (completed week)  •  Q2 pacing: {Q2_START.strftime('%b %-d')}–{qtd_end.strftime('%b %-d')} (most recent available)_
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-:flag-us: *United States* {us_roi_sig}
-• ROI: *{us_w_roi:.2f}x* ({us_roi_wow} WoW)
-• Spend: *${us_w_spend/1e6:.1f}M* ({us_spend_wow} WoW)
-• NFAs: *{us_w_nfas:,}* ({us_nfas_wow} WoW)
-• Q2 Spend Pacing: ${us_qtd_sp/1e6:.1f}M / ${US_Q2_TARGET/1e6:.0f}M → *{us_pacing*100:.0f}% of pace* {us_spend_pace_sig}
+:flag-us: *United States* {us_section_sig}
+{us_section_body}
 
-:flag-eu: *Europe* {eu_sig}
-• ROI: *{eu_w_roi:.2f}x* ({eu_roi_wow} WoW)
-• Spend: *${eu_w_spend:,.0f}* ({eu_spend_wow} WoW)
-• NFAs: *{eu_w_nfas:,}* ({eu_nfas_wow} WoW)
+:flag-eu: *Europe* {eu_section_sig}
+{eu_section_body}
 
 :flag-gb: *United Kingdom* {uk_pacing_sig}
 • ROI: *{uk_w_roi:.1f}x* ({uk_roi_wow} WoW)
