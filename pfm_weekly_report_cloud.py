@@ -15,11 +15,8 @@ US_Q2_TARGET  = 46_200_000
 Q2_START      = datetime.date(2026, 4, 1)
 
 # ── Credentials from env vars ────────────────────────────────────────────────
-SLACK_TOKEN         = os.environ['SLACK_BOT_TOKEN'].strip()
-SUPA_REFRESH_TOKEN  = os.environ['SUPERSET_REFRESH_TOKEN'].strip()
-SUPA_CLIENT_ID      = os.environ['SUPERSET_CLIENT_ID'].strip()
-SUPA_CLIENT_SECRET  = os.environ['SUPERSET_CLIENT_SECRET'].strip()
-G_ACCESS_TOKEN      = os.environ.get('GOOGLE_ACCESS_TOKEN', '').strip()
+SLACK_TOKEN    = os.environ['SLACK_BOT_TOKEN'].strip()
+G_ACCESS_TOKEN = os.environ.get('GOOGLE_ACCESS_TOKEN', '').strip()
 G_REFRESH_TOKEN     = os.environ['GOOGLE_REFRESH_TOKEN'].strip()
 G_CLIENT_ID         = os.environ['GOOGLE_CLIENT_ID'].strip()
 G_CLIENT_SECRET     = os.environ['GOOGLE_CLIENT_SECRET'].strip()
@@ -46,25 +43,10 @@ print(f"QTD window: {qtd_start} to {qtd_end_s} (day {q2_days_elapsed} of 91, {q2
 
 
 # ── Superset auth (refresh token → access token) ─────────────────────────────
-def get_superset_token() -> str:
-    """Always refresh using the stored refresh token — access token in secrets may be stale."""
-    print("  Refreshing Superset token...")
-    resp = requests.post('https://superset.robinhood.com/token', data={
-        'grant_type':    'refresh_token',
-        'client_id':     SUPA_CLIENT_ID,
-        'client_secret': SUPA_CLIENT_SECRET,
-        'refresh_token': SUPA_REFRESH_TOKEN,
-    }, timeout=15)
-    if resp.status_code != 200:
-        # Fall back to the access token passed directly
-        print(f"  Token refresh returned {resp.status_code}, falling back to SUPERSET_ACCESS_TOKEN env var")
-        return os.environ.get('SUPERSET_ACCESS_TOKEN', '').strip()
-    data = resp.json()
-    token = data.get('access_token', '')
-    print(f"  Superset token refreshed (expires in {data.get('expires_in', '?')}s)")
-    return token
-
-SUPA_TOKEN = get_superset_token()
+# Access token is kept fresh by sync_tokens_to_github.py running on Mac at 8:50 AM
+# (Superset /token endpoint blocks external IPs — refresh only works on local network)
+SUPA_TOKEN = os.environ['SUPERSET_ACCESS_TOKEN'].strip()
+print(f"  Using SUPERSET_ACCESS_TOKEN (len={len(SUPA_TOKEN)})")
 SUPA_HDRS  = {
     'Authorization': f'Bearer {SUPA_TOKEN}',
     'Content-Type':  'application/json',
