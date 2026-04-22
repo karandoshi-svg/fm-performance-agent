@@ -202,7 +202,9 @@ for row in sheet_rows:
     if row and row[0] not in ('', 'Week Of', 'QTD (Q4)', 'QTD (Q2)', 'YTD ', 'Install to Funding Ratio '):
         try:
             datetime.date.fromisoformat(row[0])
-            uk_data_rows.append(row)
+            # Only weekly performance rows have a $ spend in col 1 — skip ratio/pct tables
+            if len(row) > 1 and str(row[1]).startswith('$'):
+                uk_data_rows.append(row)
         except Exception:
             pass
 
