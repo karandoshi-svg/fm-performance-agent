@@ -34,6 +34,7 @@ jobs:
           GOOGLE_REFRESH_TOKEN:   ${{ secrets.GOOGLE_REFRESH_TOKEN }}
           GOOGLE_CLIENT_ID:       ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET:   ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          PREFETCHED_DATA:        ${{ secrets.PREFETCHED_DATA }}
         run: python pfm_weekly_report_cloud.py
 
       - name: Notify on failure
