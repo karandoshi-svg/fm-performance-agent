@@ -1,0 +1,52 @@
+name: PFM Weekly Report
+
+on:
+  schedule:
+    # Monday 9:00 AM PST = Monday 17:00 UTC
+    - cron: '0 17 * * 1'
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run PFM Weekly Report
+        env:
+          SLACK_BOT_TOKEN:            ${{ secrets.SLACK_BOT_TOKEN }}
+          SUPERSET_ACCESS_TOKEN:      ${{ secrets.SUPERSET_ACCESS_TOKEN }}
+          SUPERSET_REFRESH_TOKEN:     ${{ secrets.SUPERSET_REFRESH_TOKEN }}
+          SUPERSET_CLIENT_ID:         ${{ secrets.SUPERSET_CLIENT_ID }}
+          SUPERSET_CLIENT_SECRET:     ${{ secrets.SUPERSET_CLIENT_SECRET }}
+          GOOGLE_ACCESS_TOKEN:        ${{ secrets.GOOGLE_ACCESS_TOKEN }}
+          GOOGLE_REFRESH_TOKEN:       ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:           ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:       ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        run: python pfm_weekly_report_cloud.py
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          python -c "
+import requests, os
+requests.post('https://slack.com/api/chat.postMessage',
+  headers={'Authorization': 'Bearer ' + os.environ['SLACK_BOT_TOKEN'],
+           'Content-Type': 'application/json'},
+  json={'channel': '#pfm-ai-insights',
+        'text': '⚠️ *PFM Weekly Report failed on GitHub Actions* — check https://github.com/$(git config --get remote.origin.url | sed s/.*github.com.// | sed s/.git//)/actions',
+        'mrkdwn': True})
+"

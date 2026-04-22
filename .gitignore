@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+cron.log
+*.log
+*.pkl
+*.html
+.env
+# Never commit token files or secrets
+~/.pfm-agent.env
+~/.pfm-superset-tokens.json
+~/.config/google-mcp/tokens.json
