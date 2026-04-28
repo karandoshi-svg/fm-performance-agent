@@ -6,8 +6,11 @@ Runs locally (Mac) every Monday 8:50 AM.
 3. Pushes tokens + pre-fetched data to GitHub Secrets
    so GitHub Actions has everything it needs when it fires at 9 AM.
 """
-import base64, datetime, json, os, requests, time
+import base64, datetime, json, os, requests, sys, time
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from meta_alerts import run_meta_alerts
 
 GITHUB_REPO  = 'karandoshi-svg/fm-performance-agent'
 TOKEN_FILE   = Path('~/.pfm-superset-tokens.json').expanduser()
@@ -78,6 +81,34 @@ def mcp_sql(sql):
                     return p['result'].get('structuredContent',{}).get('rows',[{}])[0]
     return {}
 
+def mcp_rows_presto(sql, database_id, schema, limit=5000, timeout=300):
+    """Query Presto via MCP (streaming SSE) and return all result rows as a list of dicts."""
+    r = requests.post(SUPERSET_MCP, headers=SUPA_HDRS, timeout=timeout, stream=True,
+        json={'jsonrpc':'2.0','id':1,'method':'tools/call',
+              'params':{'name':'execute_sql','arguments':{'request':{
+                  'sql': sql, 'database_id': database_id,
+                  'schema': schema, 'limit': limit}}}})
+    for raw_line in r.iter_lines(decode_unicode=True):
+        if not raw_line or not raw_line.startswith('data:'):
+            continue
+        d = raw_line[5:].strip()
+        if not d or d == '[DONE]':
+            continue
+        p = json.loads(d)
+        if 'result' not in p:
+            continue
+        # Presto results arrive via content[0]['text'] as JSON
+        for block in p['result'].get('content', []):
+            if block.get('type') == 'text':
+                data = json.loads(block['text'])
+                if data.get('success'):
+                    return data.get('rows') or []
+                else:
+                    print(f"  [mcp_rows_presto] query error: {str(data.get('error','?'))[:200]}")
+                    return []
+    return []
+
+
 def mcp_chart(chart_id):
     r = requests.post(SUPERSET_MCP, headers=SUPA_HDRS, timeout=90,
         json={'jsonrpc':'2.0','id':1,'method':'tools/call',
@@ -133,6 +164,26 @@ prefetched = {
 }
 print(f"  Pre-fetch complete.")
 
+# ── Step 2b: Run Meta alerts locally (requires Presto on internal network) ─────
+print("Running Meta CPA alerts...")
+try:
+    meta_alerts_data = run_meta_alerts(mcp_rows_presto)
+    # Strip non-serialisable callables before JSON-encoding
+    meta_alerts_json = json.dumps({
+        k: v for k, v in meta_alerts_data.items()
+        if k in ('creative_fatigue', 'campaign_risk', 'adset_risk',
+                 'improvement', 'slack_section', 'gdoc_section')
+    })
+    print(f"  Meta alerts: {len(meta_alerts_data.get('creative_fatigue',[]))} fatigue, "
+          f"{len(meta_alerts_data.get('campaign_risk',[]))+len(meta_alerts_data.get('adset_risk',[]))} risk, "
+          f"{len(meta_alerts_data.get('improvement',[]))} improving")
+except Exception as e:
+    print(f"  WARNING: Meta alerts failed: {e}")
+    meta_alerts_json = json.dumps({
+        'creative_fatigue': [], 'campaign_risk': [], 'adset_risk': [],
+        'improvement': [], 'slack_section': '', 'gdoc_section': '',
+    })
+
 # ── Step 3: Get GitHub repo public key ────────────────────────────────────────
 hdrs = {'Authorization': f'Bearer {GITHUB_PAT}', 'Accept': 'application/vnd.github+json'}
 key_resp = requests.get(
@@ -164,4 +215,5 @@ print("Pushing to GitHub Secrets...")
 update_secret('SUPERSET_ACCESS_TOKEN',  tokens['access_token'])
 update_secret('SUPERSET_REFRESH_TOKEN', tokens['refresh_token'])
 update_secret('PREFETCHED_DATA',        json.dumps(prefetched))
-print("Done. GitHub Actions will have full US/EU data at 9 AM.")
+update_secret('META_ALERTS_DATA',       meta_alerts_json)
+print("Done. GitHub Actions will have full US/EU data + Meta alerts at 9 AM.")

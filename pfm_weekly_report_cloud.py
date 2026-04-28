@@ -15,9 +15,16 @@ US_Q2_TARGET  = 46_200_000
 Q2_START      = datetime.date(2026, 4, 1)
 
 # ── Credentials from env vars ────────────────────────────────────────────────
-SLACK_TOKEN      = os.environ['SLACK_BOT_TOKEN'].strip()
-G_ACCESS_TOKEN   = os.environ.get('GOOGLE_ACCESS_TOKEN', '').strip()
-PREFETCHED_RAW   = os.environ.get('PREFETCHED_DATA', '').strip()
+SLACK_TOKEN          = os.environ['SLACK_BOT_TOKEN'].strip()
+G_ACCESS_TOKEN       = os.environ.get('GOOGLE_ACCESS_TOKEN', '').strip()
+PREFETCHED_RAW       = os.environ.get('PREFETCHED_DATA', '').strip()
+META_ALERTS_RAW      = os.environ.get('META_ALERTS_DATA', '').strip()
+SUPA_ACCESS_TOKEN    = os.environ.get('SUPERSET_ACCESS_TOKEN', '').strip()
+SUPA_REFRESH_TOKEN   = os.environ.get('SUPERSET_REFRESH_TOKEN', '').strip()
+SUPA_CLIENT_ID       = os.environ.get('SUPERSET_CLIENT_ID', '').strip()
+SUPA_CLIENT_SECRET   = os.environ.get('SUPERSET_CLIENT_SECRET', '').strip()
+GITHUB_PAT           = os.environ.get('GITHUB_PAT', '').strip()
+GITHUB_REPO          = 'karandoshi-svg/fm-performance-agent'
 G_REFRESH_TOKEN     = os.environ['GOOGLE_REFRESH_TOKEN'].strip()
 G_CLIENT_ID         = os.environ['GOOGLE_CLIENT_ID'].strip()
 G_CLIENT_SECRET     = os.environ['GOOGLE_CLIENT_SECRET'].strip()
@@ -112,6 +119,16 @@ GTOK = get_google_token()
 prefetched = json.loads(PREFETCHED_RAW) if PREFETCHED_RAW else {}
 if prefetched:
     print(f"  Using pre-fetched data from {prefetched.get('fetched_at','?')}")
+
+meta_alerts = json.loads(META_ALERTS_RAW) if META_ALERTS_RAW else {}
+meta_slack_section = meta_alerts.get('slack_section', '')
+if meta_alerts:
+    n_fatigue = len(meta_alerts.get('creative_fatigue', []))
+    n_risk    = len(meta_alerts.get('campaign_risk', [])) + len(meta_alerts.get('adset_risk', []))
+    n_improve = len(meta_alerts.get('improvement', []))
+    print(f"  Meta alerts loaded: {n_fatigue} fatigue, {n_risk} risk, {n_improve} improving")
+else:
+    print("  No META_ALERTS_DATA found — Meta section will be omitted")
 
 if prefetched and prefetched.get('rpt_start') == rpt_start:
     # Use pre-fetched data pushed by Mac sync script
@@ -319,8 +336,8 @@ _Performance: {last_monday.strftime('%b %-d')}–{last_sunday.strftime('%-d')} (
 • UK Spend:  ${uk_qtd_sp:,.0f}  /  ${UK_Q2_TARGET/1e6:.1f}M  →  *{uk_qtd_sp/UK_Q2_TARGET*100:.1f}%* {uk_pacing_sig}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-:page_facing_up: *For detailed analysis* (ROI tables, full Q2 pacing, L4W campaign breakdown by channel):
+{meta_slack_section + chr(10) if meta_slack_section else ""}
+:page_facing_up: *For detailed analysis* (ROI tables, full Q2 pacing, L4W campaign breakdown, Meta alerts):
 {DOC_URL}"""
 
 # ── Post to Slack ─────────────────────────────────────────────────────────────

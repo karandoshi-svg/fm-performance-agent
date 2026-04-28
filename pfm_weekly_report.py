@@ -3,8 +3,11 @@
 PFM Weekly Performance Report — posts every Monday 9 AM PT to #pfm-ai-insights
 Auto-determines reporting week (previous Mon–Sun) and QTD pacing window.
 """
-import json, requests, time, datetime
+import json, requests, sys, time, datetime
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from meta_alerts import run_meta_alerts
 
 # ── Config ─────────────────────────────────────────────────────────────────
 ENV_FILE     = Path('~/.pfm-agent.env').expanduser()
@@ -100,6 +103,33 @@ def mcp_chart(chart_id):
                         return json.loads(p['result']['content'][0]['text'])
                     except: pass
     return None
+
+def mcp_rows_presto(sql, database_id, schema, limit=5000, timeout=300):
+    """Query Presto via MCP (streaming SSE) and return all result rows as a list of dicts."""
+    resp = requests.post(SUPERSET_BASE, headers=SUPA_HDRS, timeout=timeout, stream=True,
+        json={'jsonrpc':'2.0','id':1,'method':'tools/call',
+              'params':{'name':'execute_sql','arguments':{'request':{
+                  'sql': sql, 'database_id': database_id,
+                  'schema': schema, 'limit': limit}}}})
+    for raw_line in resp.iter_lines(decode_unicode=True):
+        if not raw_line or not raw_line.startswith('data:'):
+            continue
+        d = raw_line[5:].strip()
+        if not d or d == '[DONE]':
+            continue
+        p = json.loads(d)
+        if 'result' not in p:
+            continue
+        for block in p['result'].get('content', []):
+            if block.get('type') == 'text':
+                data = json.loads(block['text'])
+                if data.get('success'):
+                    return data.get('rows') or []
+                else:
+                    print(f"  [mcp_rows_presto] query error: {str(data.get('error','?'))[:200]}")
+                    return []
+    return []
+
 
 # ── US metrics ───────────────────────────────────────────────────────────────
 print("Fetching US weekly metrics...")
@@ -235,6 +265,18 @@ qtd_spend = qtd.get('spend', 0) or 0
 qtd_nfas  = int(qtd.get('nfas', 0) or 0)
 qtd_gold  = int(qtd.get('gold', 0) or 0)
 
+# ── Meta CPA alerts ──────────────────────────────────────────────────────────
+print("Running Meta CPA alerts...")
+try:
+    _meta = run_meta_alerts(mcp_rows_presto)
+    meta_slack_section = _meta.get('slack_section', '')
+    print(f"  Meta alerts: {len(_meta.get('creative_fatigue',[]))} fatigue, "
+          f"{len(_meta.get('campaign_risk',[]))+len(_meta.get('adset_risk',[]))} risk, "
+          f"{len(_meta.get('improvement',[]))} improving")
+except Exception as e:
+    print(f"  WARNING: Meta alerts failed: {e}")
+    meta_slack_section = ''
+
 # ── Compose message ──────────────────────────────────────────────────────────
 us_roi_sig = "🟡" if us_w_roi >= 4.5 else "🔴"
 eu_sig = "🔴"
@@ -271,7 +313,9 @@ _Performance: {last_monday.strftime('%b %-d')}–{last_sunday.strftime('%-d')} (
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📄 *For detailed analysis* (ROI tables, full Q2 pacing, L4W campaign breakdown by channel):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{meta_slack_section + chr(10) if meta_slack_section else ""}
+📄 *For detailed analysis* (ROI tables, full Q2 pacing, L4W campaign breakdown, Meta alerts):
 {DOC_URL}"""
 
 # ── Post to Slack ────────────────────────────────────────────────────────────
