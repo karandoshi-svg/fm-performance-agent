@@ -82,30 +82,38 @@ def mcp_sql(sql):
     return {}
 
 def mcp_rows_presto(sql, database_id, schema, limit=5000, timeout=300):
-    """Query Presto via MCP (streaming SSE) and return all result rows as a list of dicts."""
-    r = requests.post(SUPERSET_MCP, headers=SUPA_HDRS, timeout=timeout, stream=True,
-        json={'jsonrpc':'2.0','id':1,'method':'tools/call',
-              'params':{'name':'execute_sql','arguments':{'request':{
-                  'sql': sql, 'database_id': database_id,
-                  'schema': schema, 'limit': limit}}}})
-    for raw_line in r.iter_lines(decode_unicode=True):
-        if not raw_line or not raw_line.startswith('data:'):
-            continue
-        d = raw_line[5:].strip()
-        if not d or d == '[DONE]':
-            continue
-        p = json.loads(d)
-        if 'result' not in p:
-            continue
-        # Presto results arrive via content[0]['text'] as JSON
-        for block in p['result'].get('content', []):
-            if block.get('type') == 'text':
-                data = json.loads(block['text'])
-                if data.get('success'):
-                    return data.get('rows') or []
-                else:
-                    print(f"  [mcp_rows_presto] query error: {str(data.get('error','?'))[:200]}")
-                    return []
+    """Query Presto via MCP (streaming SSE) and return all result rows as a list of dicts.
+    Retries once on connection drops (ChunkedEncodingError / premature EOF)."""
+    for attempt in range(2):
+        try:
+            r = requests.post(SUPERSET_MCP, headers=SUPA_HDRS, timeout=timeout, stream=True,
+                json={'jsonrpc':'2.0','id':1,'method':'tools/call',
+                      'params':{'name':'execute_sql','arguments':{'request':{
+                          'sql': sql, 'database_id': database_id,
+                          'schema': schema, 'limit': limit}}}})
+            for raw_line in r.iter_lines(decode_unicode=True):
+                if not raw_line or not raw_line.startswith('data:'):
+                    continue
+                d = raw_line[5:].strip()
+                if not d or d == '[DONE]':
+                    continue
+                p = json.loads(d)
+                if 'result' not in p:
+                    continue
+                for block in p['result'].get('content', []):
+                    if block.get('type') == 'text':
+                        data = json.loads(block['text'])
+                        if data.get('success'):
+                            return data.get('rows') or []
+                        else:
+                            print(f"  [mcp_rows_presto] query error: {str(data.get('error','?'))[:200]}")
+                            return []
+        except Exception as e:
+            if attempt == 0:
+                print(f"  [mcp_rows_presto] attempt 1 failed ({e}), retrying...")
+                time.sleep(5)
+                continue
+            print(f"  [mcp_rows_presto] attempt 2 failed ({e}), giving up.")
     return []
 
 
