@@ -1,8 +1,13 @@
 #!/bin/bash
-# Launcher wrapper — catches failures and posts to Slack
+# Launcher wrapper — syncs tokens then runs report; catches failures and posts to Slack
 LOG=~/pfm-performance-agent/cron.log
 echo "=== PFM Weekly Report $(date) ===" >> "$LOG"
 
+# Step 1: Push fresh Superset token to GitHub Secrets so cloud Actions run succeeds
+echo "-- Syncing tokens to GitHub..." >> "$LOG"
+/usr/bin/python3 ~/pfm-performance-agent/sync_tokens_to_github.py >> "$LOG" 2>&1
+
+# Step 2: Run the local report as backup
 /usr/bin/python3 ~/pfm-performance-agent/pfm_weekly_report.py >> "$LOG" 2>&1
 EXIT_CODE=$?
 

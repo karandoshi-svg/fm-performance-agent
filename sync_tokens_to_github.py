@@ -27,24 +27,29 @@ GITHUB_PAT = _env.get('GITHUB_PAT', os.environ.get('GITHUB_PAT', ''))
 # ── Step 1: Refresh Superset token locally ─────────────────────────────────────
 tokens = json.loads(TOKEN_FILE.read_text())
 print("Refreshing Superset token locally...")
-resp = requests.post('https://superset.robinhood.com/token', data={
-    'grant_type':    'refresh_token',
-    'client_id':     tokens['client_id'],
-    'client_secret': tokens['client_secret'],
-    'refresh_token': tokens['refresh_token'],
-}, timeout=15)
-
-if resp.status_code != 200:
-    print(f"ERROR: Token refresh failed ({resp.status_code}): {resp.text[:200]}")
-    raise SystemExit(1)
-
-data = resp.json()
-tokens['access_token']            = data['access_token']
-tokens['access_token_expires_at'] = time.time() + data.get('expires_in', 3600)
-if 'refresh_token' in data:
-    tokens['refresh_token'] = data['refresh_token']
-TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
-print(f"  Token refreshed (expires in {data.get('expires_in')}s)")
+_token_refreshed = False
+try:
+    resp = requests.post('https://superset.robinhood.com/token', data={
+        'grant_type':    'refresh_token',
+        'client_id':     tokens['client_id'],
+        'client_secret': tokens['client_secret'],
+        'refresh_token': tokens['refresh_token'],
+    }, timeout=20)
+    if resp.status_code != 200:
+        print(f"  WARNING: Token refresh returned {resp.status_code}: {resp.text[:200]}")
+        print("  Continuing with existing token from file...")
+    else:
+        data = resp.json()
+        tokens['access_token']            = data['access_token']
+        tokens['access_token_expires_at'] = time.time() + data.get('expires_in', 3600)
+        if 'refresh_token' in data:
+            tokens['refresh_token'] = data['refresh_token']
+        TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
+        print(f"  Token refreshed (expires in {data.get('expires_in')}s)")
+        _token_refreshed = True
+except Exception as e:
+    print(f"  WARNING: Token refresh failed ({e})")
+    print("  Continuing with existing token from file (may be expired)...")
 
 SUPA_TOKEN = tokens['access_token']
 SUPA_HDRS  = {

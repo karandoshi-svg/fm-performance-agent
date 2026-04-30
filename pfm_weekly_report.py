@@ -59,17 +59,21 @@ def get_superset_token():
     # Refresh
     client_id = tokens['client_id']
     client_secret = tokens['client_secret']
-    resp = requests.post(f'https://superset.robinhood.com/token', data={
-        'grant_type': 'refresh_token', 'client_id': client_id,
-        'client_secret': client_secret, 'refresh_token': tokens['refresh_token']
-    }, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
-    tokens['access_token'] = data['access_token']
-    tokens['access_token_expires_at'] = time.time() + data.get('expires_in', 3600)
-    if 'refresh_token' in data:
-        tokens['refresh_token'] = data['refresh_token']
-    TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
+    try:
+        resp = requests.post('https://superset.robinhood.com/token', data={
+            'grant_type': 'refresh_token', 'client_id': client_id,
+            'client_secret': client_secret, 'refresh_token': tokens['refresh_token']
+        }, timeout=20)
+        resp.raise_for_status()
+        data = resp.json()
+        tokens['access_token'] = data['access_token']
+        tokens['access_token_expires_at'] = time.time() + data.get('expires_in', 3600)
+        if 'refresh_token' in data:
+            tokens['refresh_token'] = data['refresh_token']
+        TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
+        print(f"  Superset token refreshed (expires in {data.get('expires_in')}s)")
+    except Exception as e:
+        print(f"  WARNING: Superset token refresh failed ({e}), using existing token")
     return tokens['access_token']
 
 SUPA_TOKEN = get_superset_token()
